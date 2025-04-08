@@ -20,10 +20,10 @@ namespace WebApplication.UnitTests.Controllers
         [Fact]
         public async Task GetProductById_ShouldReturnOk_WhenProductExists()
         { 
-            var productId = 1;
+            var productId = Guid.NewGuid();
             var product = new Product
             {
-                Id = Guid.NewGuid(),
+                Id = productId,
                 Name = "Test Product"
             };
 
@@ -36,12 +36,13 @@ namespace WebApplication.UnitTests.Controllers
             var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
             Assert.IsAssignableFrom<Product>(okResult.Value);
             var returnedProduct = Assert.IsType<Product>(okResult.Value);
+            _mockProductService.Verify(service => service.GetProductByIdAsync(productId), Times.Once);
         }
 
         [Fact]
         public async Task GetProductById_ShouldReturnNotFound_WhenProductDoesNotExist()
         {
-            var productId = 1;
+            var productId = Guid.NewGuid();
             _mockProductService.Setup(service => service.GetProductByIdAsync(productId)).ReturnsAsync((Product?)null);
 
             var result = await _controller.GetProduct(productId);
@@ -49,6 +50,7 @@ namespace WebApplication.UnitTests.Controllers
             Assert.NotNull(result);
             var actionResult = Assert.IsType<ActionResult<Product>>(result);
             Assert.IsType<NotFoundResult>(actionResult.Result);
+            _mockProductService.Verify(service => service.GetProductByIdAsync(productId), Times.Once);
         }
 
         [Fact]
@@ -68,12 +70,13 @@ namespace WebApplication.UnitTests.Controllers
             var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
             var returnedProducts = Assert.IsAssignableFrom<IEnumerable<Product>>(okResult.Value);
             Assert.Equal(2, returnedProducts.Count());
+            _mockProductService.Verify(service => service.GetAllProductsAsync(), Times.Once);
         }
 
         [Fact]
         public async Task DeleteProduct_ShouldReturnNoContent_WhenProductIsDeleted()
         {
-            var productId = 1;
+            var productId = Guid.NewGuid();
 
             _mockProductService.Setup(service => service.DeleteProductAsync(productId)).Returns(Task.CompletedTask);
 
@@ -81,6 +84,7 @@ namespace WebApplication.UnitTests.Controllers
 
             var actionResult = Assert.IsAssignableFrom<IActionResult>(result);
             Assert.IsType<NoContentResult>(actionResult);
+            _mockProductService.Verify(service => service.DeleteProductAsync(productId), Times.Once);
         }
 
         [Fact]
@@ -100,6 +104,7 @@ namespace WebApplication.UnitTests.Controllers
 
             var actionResult = Assert.IsAssignableFrom<IActionResult>(result);
             Assert.IsType<NoContentResult>(actionResult);
+            _mockProductService.Verify(service => service.UpdateProductAsync(product), Times.Once);
         }
 
         [Fact]
@@ -117,6 +122,9 @@ namespace WebApplication.UnitTests.Controllers
 
             var actionResult = Assert.IsType<ActionResult<Product>>(result);
             var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+            var returnedProduct = Assert.IsType<Product>(okResult.Value);
+            Assert.Equal(product.Name, returnedProduct.Name);
+            _mockProductService.Verify(service => service.CreateProductAsync(product), Times.Once);
         }
     }
 }

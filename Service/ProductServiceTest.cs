@@ -1,67 +1,89 @@
 ﻿
-
-using Microsoft.EntityFrameworkCore;
 using Moq;
-using System.Linq.Expressions;
-using WebApplication1.Data;
 using WebApplication1.Exceptions;
 using WebApplication1.Models;
+using WebApplication1.Repository;
 using WebApplication1.Service;
 
 namespace WebApplication.UnitTests.Service
 {
     public class ProductServiceTest
     {
-        //private readonly Mock<AppDbContext> _mockContext;
-        //private readonly ProductService _productService;
-        //private readonly Mock<DbSet<Product>> _mockProductDbSet;
-
-        //public ProductServiceTest()
-        //{
-        //    _mockContext = new Mock<AppDbContext>();
-        //    _mockProductDbSet = new Mock<DbSet<Product>>();
-        //    _mockContext.Setup(c => c.Products).Returns(_mockProductDbSet.Object);
-
-        //    _productService = new ProductService(_mockContext.Object);
-        //}
-
-        //[Fact]
-        //public async Task CreateProductAsync_ProductExists_ThrowsDuplicateProductException()
-        //{
-        //    var product = new Product { Id = Guid.NewGuid(), Name = "New Product" };
-        //    _mockProductDbSet.Setup(m => m.AnyAsync(It.IsAny<Expression<Func<Product, bool>>>(), default)).ReturnsAsync(false);
-
-
-        //    // Act & Assert
-        //    await Assert.ThrowsAsync<DuplicateProductException>(() => _productService.CreateProductAsync(product));
-
-        //    //Assert.NotNull(result);
-        //    //Assert.Equal(product.Name, result.Name);
-        //    _mockProductDbSet.Verify(m => m.Add(It.IsAny<Product>()), Times.Once);
-        //    _mockContext.Verify(c => c.SaveChangesAsync(default), Times.Once);
-        //}
-        private readonly Mock<AppDbContext> _mockContext;
+        private readonly Mock<IProductRepository> _mockProductRepository;
         private readonly ProductService _productService;
 
         public ProductServiceTest()
         {
-            _mockContext = new Mock<AppDbContext>();
-            _productService = new ProductService(_mockContext.Object);
+            _mockProductRepository = new Mock<IProductRepository>();
+            _productService = new ProductService(_mockProductRepository.Object);
         }
 
         [Fact]
-        public async Task CreateProductAsync_ProductExists_ThrowsDuplicateProductException()
+        public async Task CreateProductAsync_ShouldThrowDuplicateProductException_WhenProductAlreadyExists()
         {
-            // Arrange
-            var product = new Product { Id =Guid.NewGuid(), Name = "Test Product" };
+            _mockProductRepository.Setup(repo => repo.ProductExistsAsync(It.IsAny<string>())).ReturnsAsync(true);
 
-            // Mock the DbContext to simulate that the product already exists
-            _mockContext.Setup(c => c.Products.AnyAsync(It.IsAny<Expression<Func<Product, bool>>>(), default))
-                        .ReturnsAsync(true);
-
-            // Act & Assert
-            var exception = await Assert.ThrowsAsync<DuplicateProductException>(() => _productService.CreateProductAsync(product));
+            var exception = await Assert.ThrowsAsync<DuplicateProductException>(() => _productService.CreateProductAsync(new Product { Name = "Test Product" }));
             Assert.Equal("Product already exists", exception.Message);
+        }
+
+        [Fact]
+        public async Task CreateProductAsync_ShouldCreateProduct_WhenProductDoesNotExist() 
+        {
+            _mockProductRepository.Setup(repo => repo.ProductExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
+            _mockProductRepository.Setup(repo => repo.CreateProductAsync(It.IsAny<Product>())).ReturnsAsync(new Product { Id = Guid.NewGuid(), Name = "Test Product" });
+
+            var result = await _productService.CreateProductAsync(new Product { Name = "Test Product" });
+
+            Assert.NotNull(result);
+            Assert.Equal("Test Product", result.Name);
+            _mockProductRepository.Verify(repo => repo.CreateProductAsync(It.IsAny<Product>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetProductByIdAsync_ShouldThrowException_WhenProductNotFound() 
+        {
+            _mockProductRepository.Setup(repo => repo.GetProductByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Product?)null);
+
+            var exception = await Assert.ThrowsAsync<Exception>(() => _productService.GetProductByIdAsync(Guid.NewGuid()));
+            Assert.Equal("Product not found", exception.Message);
+        }
+
+        [Fact]
+        public async Task GetProductByIdAsync_ShouldReturnProduct_WhenProductExists() 
+        {
+            var productId = Guid.NewGuid();
+            
+            _mockProductRepository.Setup(repo => repo.GetProductByIdAsync(It.IsAny<Guid>())).ReturnsAsync(new Product { Id = productId, Name = "Test Product" });
+
+            var result = await _productService.GetProductByIdAsync(productId);
+
+            Assert.NotNull(result);
+            Assert.Equal(productId, result.Id);
+            Assert.Equal("Test Product", result.Name);
+            _mockProductRepository.Verify(repo => repo.GetProductByIdAsync(It.IsAny<Guid>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateProductAsync_ShouldThrowException_WhenProductNotFound() 
+        {
+            _mockProductRepository.Setup(repo => repo.GetProductByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Product?)null);
+
+            var exception = await Assert.ThrowsAsync<Exception>(() => _productService.UpdateProductAsync(new Product { Id = Guid.NewGuid(), Name = "Updated Product" }));
+            Assert.Equal("Product not found", exception.Message);
+        }
+
+        [Fact]
+        public async Task UpdateProductAsync_ShouldUpdateProduct_WhenProductExists() 
+        {
+            var productId = Guid.NewGuid();
+            
+            _mockProductRepository.Setup(repo => repo.GetProductByIdAsync(It.IsAny<Guid>())).ReturnsAsync(new Product { Id = productId, Name = "Test Product" });
+            _mockProductRepository.Setup(repo => repo.UpdateProductAsync(It.IsAny<Product>())).Returns(Task.CompletedTask);
+
+            await _productService.UpdateProductAsync(new Product { Id = productId, Name = "Updated Product" });
+
+            _mockProductRepository.Verify(repo => repo.UpdateProductAsync(It.IsAny<Product>()), Times.Once);
         }
     }
 }
